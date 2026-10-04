@@ -1,0 +1,36 @@
+{
+	"Name": "herdr agent status",
+	"Version": "0.1.0",
+	"Author": "cdcxd",
+	"Description": "Live herdr agent status on your Stream Deck: red when an agent needs you, blue while it works.",
+	"URL": "https://github.com/cdcxd/opendeck-herdr-plugin",
+	"Category": "herdr",
+	"CategoryIcon": "imgs/category",
+	"Icon": "imgs/plugin",
+	"SDKVersion": 2,
+	"CodePath": "plugin.js",
+	"CodePathLin": "bin/launch.sh",
+	"CodePathMac": "bin/launch.sh",
+	"OS": [{ "Platform": "linux" }, { "Platform": "mac", "MinimumVersion": "12" }],
+	"Software": { "MinimumVersion": "6.0" },
+	"Actions": [
+		{
+			"Name": "Agent",
+			"UUID": "io.github.cdcxd.herdr.agent",
+			"Icon": "imgs/agent",
+			"Tooltip": "Shows one herdr agent's status. Press to focus it.",
+			"PropertyInspectorPath": "pi/agent.html",
+			"Controllers": ["Keypad"],
+			"States": [{ "Image": "imgs/agent" }]
+		},
+		{
+			"Name": "Summary",
+			"UUID": "io.github.cdcxd.herdr.summary",
+			"Icon": "imgs/summary",
+			"Tooltip": "Counts agents by status. Press to focus the one that needs you.",
+			"PropertyInspectorPath": "pi/summary.html",
+			"Controllers": ["Keypad"],
+			"States": [{ "Image": "imgs/summary" }]
+		}
+	]
+}

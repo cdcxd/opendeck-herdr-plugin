@@ -1,0 +1,7 @@
+body { font: 13px system-ui, sans-serif; color: #d6d8de; background: transparent; margin: 8px; }
+.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.row > label:first-child { flex: 0 0 110px; color: #9da2ad; }
+.row input:not([type="checkbox"]), .row select { flex: 1; min-width: 0; background: #2a2c31; color: inherit; border: 1px solid #3a3d44; border-radius: 4px; padding: 4px 6px; }
+h4 { margin: 14px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #7c818c; }
+.hint { font-size: 11px; color: #7c818c; margin: 2px 0 6px 118px; }
+#status { font-size: 11px; color: #7c818c; margin-top: 10px; word-break: break-all; }

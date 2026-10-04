@@ -1,0 +1,25 @@
+{
+	"name": "opendeck-herdr-plugin",
+	"version": "0.1.0",
+	"description": "Live herdr agent status on a Stream Deck via OpenDeck.",
+	"type": "module",
+	"license": "MIT",
+	"private": true,
+	"engines": {
+		"node": ">=22.18"
+	},
+	"scripts": {
+		"build": "sh scripts/build.sh",
+		"typecheck": "tsc -p tsconfig.test.json",
+		"test": "node --test \"test/*.test.ts\"",
+		"check": "npm run typecheck && npm test",
+		"package": "npm run build && sh scripts/package.sh",
+		"deploy": "npm run build && sh scripts/install.sh"
+	},
+	"devDependencies": {
+		"@types/node": "^26.6.4",
+		"typescript": "^7.0.2"
+	},
+	"repository": "github:cdcxd/opendeck-herdr-plugin",
+	"author": "cdcxd"
+}
