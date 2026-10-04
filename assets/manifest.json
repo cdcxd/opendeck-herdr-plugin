@@ -1,6 +1,6 @@
 {
 	"Name": "herdr agent status",
-	"Version": "0.1.0",
+	"Version": "0.2.0",
 	"Author": "cdcxd",
 	"Description": "Live herdr agent status on your Stream Deck: red when an agent needs you, blue while it works.",
 	"URL": "https://github.com/cdcxd/opendeck-herdr-plugin",

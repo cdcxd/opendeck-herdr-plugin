@@ -126,4 +126,8 @@ npm run package   # dist/io.github.cdcxd.herdr.streamDeckPlugin
 
 `docs/keys.png` is drawn by the plugin's own renderer from fake agents: see `scripts/mock-deck.ts` for the command.
 
-Stream Deck hosts load a folder named `<plugin uuid>.sdPlugin`; that folder is generated in `dist/`, so the repo itself stays flat. Pushing a `v*` tag builds the package and attaches it to a GitHub release.
+Stream Deck hosts load a folder named `<plugin uuid>.sdPlugin`; that folder is generated in `dist/`, so the repo itself stays flat. Pushing a `v*` tag builds the package and attaches it to a GitHub release. Bump `Version` in `assets/manifest.json` and `version` in `package.json` to match the tag first; CI refuses a mismatch, because OpenDeck offers updates by comparing the two.
+
+## Disclaimer
+
+This integration is not affiliated with or endorsed by Herdr.

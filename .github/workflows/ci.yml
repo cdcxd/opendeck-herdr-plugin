@@ -25,6 +25,16 @@ jobs:
         with:
           name: plugin
           path: dist/io.github.cdcxd.herdr.streamDeckPlugin
+      # OpenDeck compares the latest release tag with the installed manifest version
+      # to offer updates, so a release whose manifest disagrees would never stop offering one.
+      - if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          manifest=$(jq -r .Version assets/manifest.json)
+          package=$(jq -r .version package.json)
+          if [ "v$manifest" != "$GITHUB_REF_NAME" ] || [ "v$package" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME, but manifest.json has $manifest and package.json has $package"
+            exit 1
+          fi
       # OpenDeck's plugin manager installs .streamDeckPlugin assets from GitHub releases.
       - if: startsWith(github.ref, 'refs/tags/v')
         env:

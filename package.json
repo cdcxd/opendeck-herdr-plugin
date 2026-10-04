@@ -1,6 +1,6 @@
 {
 	"name": "opendeck-herdr-plugin",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Live herdr agent status on a Stream Deck via OpenDeck.",
 	"type": "module",
 	"license": "MIT",
