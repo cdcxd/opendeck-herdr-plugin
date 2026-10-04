@@ -64,7 +64,8 @@ export function parseWmctrl(out: string): { id: string; pid: number }[] {
 }
 
 async function processes(): Promise<Proc[]> {
-	const { stdout } = await run("ps", ["-eo", "pid=,ppid=,args="], { maxBuffer: 8 << 20 });
+	// -ww: BSD ps cuts args to the terminal width otherwise.
+	const { stdout } = await run("ps", ["-ww", "-eo", "pid=,ppid=,args="], { maxBuffer: 8 << 20 });
 	return parsePs(stdout);
 }
 
@@ -96,9 +97,11 @@ export function appBundle(args: string): string | null {
 export function bundleMainPid(procs: readonly Proc[], pid: number): number {
 	const bundle = appBundle(procs.find((p) => p.pid === pid)?.args ?? "");
 	if (!bundle) return pid;
+	// The app itself is launched by launchd (ppid 1); helpers like wezterm-mux-server
+	// or a CLI started from a shell are not. Lowest pid breaks any remaining tie.
 	const main = procs
 		.filter((p) => p.args.startsWith(`${bundle}/Contents/MacOS/`) && !p.args.slice(bundle.length).includes(".app/"))
-		.sort((a, b) => a.pid - b.pid)[0];
+		.sort((a, b) => Number(b.ppid === 1) - Number(a.ppid === 1) || a.pid - b.pid)[0];
 	return main?.pid ?? pid;
 }
 

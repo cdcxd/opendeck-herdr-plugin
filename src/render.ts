@@ -175,28 +175,34 @@ export function renderOffline(): string {
 	);
 }
 
-// Counts for every status that has at least one agent; blocked first.
-export function renderSummary(counts: Partial<Record<Status, number>>, { flashOn = false } = {}): string {
-	const rows = (["blocked", "done", "working", "idle"] as const).filter((s) => (counts[s] ?? 0) > 0);
-	const alert = (counts.blocked ?? 0) > 0;
-	const bg = alert && flashOn ? BG_ALERT : BG;
-	if (rows.length === 0) {
-		return svg(bg, text(72, 66, 26, "#c9ccd3", "herdr", { weight: 700, anchor: "middle" }) + text(72, 98, 18, COLORS.off, "no agents", { anchor: "middle" }));
+// Counts in a fixed 2x2 grid (idle, working / blocked, done), number under the dot, so
+// each status always sits in the same corner. Dots match the agent keys (static);
+// zero counts are dimmed, dot included. A red outline marks blocked agents; it
+// doesn't blink, the agent keys do that.
+export function renderSummary(counts: Partial<Record<Status, number>>): string {
+	const total = (["blocked", "done", "working", "idle"] as const).reduce((n, s) => n + (counts[s] ?? 0), 0);
+	if (total === 0) {
+		return svg(BG, text(72, 66, 26, "#c9ccd3", "herdr", { weight: 700, anchor: "middle" }) + text(72, 98, 18, COLORS.off, "no agents", { anchor: "middle" }));
 	}
-	const words = { blocked: "blocked", done: "done", working: "working", idle: "idle" } as const;
-	const step = 144 / (rows.length + 1);
-	const body = rows
-		.map((s, i) => {
-			const y = step * (i + 1);
-			return (
-				dot(22, y, 9, s) +
-				text(52, y + 9, 26, "#ffffff", String(counts[s] ?? 0), { weight: 700, anchor: "middle" }) +
-				text(70, y + 6, 15, "#c9ccd3", words[s])
-			);
+	const cells = [
+		["idle", 0, 0],
+		["working", 72, 0],
+		["blocked", 0, 72],
+		["done", 72, 72],
+	] as const;
+	const body = cells
+		.map(([status, x, y]) => {
+			const n = counts[status] ?? 0;
+			const label = n > 99 ? "99+" : String(n);
+			const cx = x + 36;
+			const cy = y + 27;
+			// Zero counts keep their color, dimmed, so the grid still reads by color.
+			const mark = n > 0 ? dot(cx, cy, 15, status) : `<g opacity="0.35">${dot(cx, cy, 15, status)}</g>`;
+			return mark + text(cx, y + 65, label.length > 2 ? 20 : 26, n > 0 ? "#ffffff" : COLORS.off, label, { weight: 700, anchor: "middle" });
 		})
 		.join("");
-	const border = alert ? `<rect x="3" y="3" width="138" height="138" rx="10" fill="none" stroke="${COLORS.blocked}" stroke-width="6"/>` : "";
-	return svg(bg, border + body);
+	const border = (counts.blocked ?? 0) > 0 ? `<rect x="3" y="3" width="138" height="138" rx="10" fill="none" stroke="${COLORS.blocked}" stroke-width="6"/>` : "";
+	return svg(BG, border + body);
 }
 
 const CLAUDE_ORANGE = "#d97757";

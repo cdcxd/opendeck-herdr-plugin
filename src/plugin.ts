@@ -51,7 +51,7 @@ const watcher = new HerdrWatcher({ socketPath: resolveSocketPath(), log });
 function imageFor(key: Key): string {
 	if (!watcher.connected) return renderOffline();
 	if (key.action === SUMMARY_ACTION) {
-		return renderSummary(countByStatus(watcher.agents), { flashOn: Boolean(key.settings.flash) && flashOn });
+		return renderSummary(countByStatus(watcher.agents));
 	}
 	if (key.action === USAGE_ACTION) {
 		const window = key.settings.usageWindow ?? "5h";
@@ -126,7 +126,6 @@ function updateAnimation(): void {
 	const needed =
 		watcher.connected &&
 		[...keys.values()].some((key) => {
-			if (key.action === SUMMARY_ACTION) return Boolean(key.settings.flash) && watcher.agents.some((a) => a.status === "blocked");
 			if (key.action !== AGENT_ACTION) return false;
 			const status = resolveAgent(watcher.agents, key.settings)?.status;
 			return (status === "blocked" && key.settings.flash) || (status === "working" && key.settings.animate !== false);
@@ -208,10 +207,6 @@ sd.on("willAppear", ({ context, action, device, payload }) => {
 	if (action === AGENT_ACTION && (settings.contextBar === undefined || settings.animate === undefined)) {
 		settings.contextBar ??= true;
 		settings.animate ??= true;
-		sd.setSettings(context, settings);
-	}
-	if (action === SUMMARY_ACTION && settings.flash === undefined) {
-		settings.flash = true;
 		sd.setSettings(context, settings);
 	}
 	keys.set(context, { action, device: device ?? "", settings });

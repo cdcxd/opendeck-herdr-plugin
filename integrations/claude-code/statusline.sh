@@ -44,7 +44,8 @@ report() {
 }
 
 # Detached, with its own stdio, so a slow or hung herdr never delays the status line.
-[ -n "$HERDR_PANE_ID" ] && report </dev/null >/dev/null 2>&1 &
+# The redirections wrap the whole background job: Claude Code waits for stdout to close.
+{ [ -n "$HERDR_PANE_ID" ] && report; } </dev/null >/dev/null 2>&1 &
 
 if [ $# -gt 0 ]; then
 	printf '%s' "$input" | "$@"

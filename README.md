@@ -29,7 +29,7 @@ The elapsed time counts from when the plugin saw the status change: herdr doesn'
   - *A specific agent*: pinned to one agent. It's matched by agent session, so the pin survives a herdr restart.
 
   New keys take the next free slot automatically. Options: skip idle agents, blink when blocked, rippling dot while working, tinted or plain background, show the pane title instead of the agent type, context bar.
-- **Summary**: counts agents per status and turns red when any agent is blocked. Press it to jump to the most urgent agent.
+- **Summary**: agent counts per status in a 2×2 grid (idle, working / blocked, done), outlined in red when any agent is blocked. Press it to jump to the most urgent agent.
 - **Usage (Claude)**: Claude plan usage and time until it resets, for the 5-hour (`5h`) or weekly (`1w`) window. Press to switch. Shows the highest value any live Claude session reported, since usage only grows within a window. Needs the [Claude Code adapter](#harness-adapters).
 
 ## Harness adapters
@@ -50,9 +50,12 @@ It prints a short `[model] 42% context` line. To keep your own status line, appe
 `.../statusline.sh ~/.claude/my-statusline.sh`. Claude Code updates the status line after each
 message, so the bar follows with that delay. This costs nothing: the status line is a local
 script fed data Claude Code already has, with no extra API calls. Plan usage is account-wide but
-only reported with Claude's own API responses, so it can lag while every session is idle. Outside herdr the script only prints the status line.
-The plugin ignores values left behind by an earlier Claude session in the same pane; that check needs
-herdr's Claude integration (`herdr integration install claude`), which herdr uses to track sessions.
+only reported with Claude's own API responses, so it can lag while every session is idle.
+Outside herdr the script only prints the status line.
+
+The plugin ignores values left behind by an earlier Claude session in the same pane. That check
+needs herdr's Claude integration (`herdr integration install claude`), which herdr uses to track
+sessions.
 
 Codex and omp adapters are planned; the token names are in [docs/plan.md](docs/plan.md).
 

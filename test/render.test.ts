@@ -63,9 +63,11 @@ describe("render", () => {
 		assert.equal(msUntilCountdownLabel(2 * 3_600_000 + 5_000), 5_001);
 		assert.equal(msUntilCountdownLabel(0), Infinity);
 	});
-	it("summary lists only non-zero statuses", () => {
-		const svg = decode(renderSummary({ blocked: 0, working: 2, done: 0, idle: 1 }));
-		assert.ok(svg.includes("working") && svg.includes("idle") && !svg.includes("blocked"));
+	it("summary shows a count per status, outlined when something is blocked", () => {
+		const svg = decode(renderSummary({ blocked: 0, working: 2, done: 0, idle: 12 }));
+		assert.ok(svg.includes(">2<") && svg.includes(">12<") && svg.includes(">0<"));
+		assert.ok(!svg.includes(`stroke="${COLORS.blocked}"`));
+		assert.ok(decode(renderSummary({ blocked: 1 })).includes(`stroke="${COLORS.blocked}"`));
 		assert.ok(decode(renderSummary({ blocked: 0, working: 0, done: 0, idle: 0 })).includes("no agents"));
 	});
 	it("renders placeholders", () => {
