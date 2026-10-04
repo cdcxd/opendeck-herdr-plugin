@@ -11,6 +11,7 @@ export const COLORS: Record<Status | "off", string> = {
 	off: "#4a4d55",
 };
 
+const AMBER = "#f5a524";
 const BG = "#141518";
 const BG_ALERT = "#4a1216";
 const FONT = "font-family=\"Inter, 'DejaVu Sans', 'Helvetica Neue', Arial, sans-serif\"";
@@ -70,6 +71,12 @@ export function msUntilNextLabel(ms: number): number {
 	return step - (elapsed % step);
 }
 
+// Milliseconds until formatElapsed(remaining) next changes while counting down.
+export function msUntilCountdownLabel(remaining: number): number {
+	if (remaining <= 0) return Infinity;
+	return (remaining % elapsedStep(remaining)) + 1;
+}
+
 // Filled dot for active states, hollow for idle (as herdr draws it).
 function dot(cx: number, cy: number, r: number, status: Status): string {
 	const color = COLORS[status];
@@ -84,13 +91,31 @@ export interface AgentKeyOptions {
 	now?: number;
 	// "tint": background washed with the status color; "plain": dark key.
 	background?: "plain" | "tint";
+	// Context window used, 0..100. Draws a bar along the bottom edge; null hides it.
+	contextPct?: number | null;
+}
+
+// Grey while there's room, amber above 70%, red above 90%.
+export function levelColor(pct: number): string {
+	if (pct >= 90) return COLORS.blocked;
+	if (pct >= 70) return AMBER;
+	return "#c9ccd3";
+}
+
+function bar(x: number, y: number, width: number, height: number, pct: number): string {
+	const fill = Math.round((width * Math.min(100, Math.max(0, pct))) / 100);
+	const r = height / 2;
+	return (
+		`<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${r}" fill="#ffffff" opacity="0.15"/>` +
+		(fill > 0 ? `<rect x="${x}" y="${y}" width="${Math.max(fill, height)}" height="${height}" rx="${r}" fill="${levelColor(pct)}"/>` : "")
+	);
 }
 
 // One agent: status dot + agent type, label, time in current status.
 // `flashOn` swaps to the alert background so a blocked key can blink.
 export function renderAgent(
 	agent: Pick<Agent, "status" | "agent" | "label" | "title" | "since">,
-	{ flashOn = false, showTitle = false, now = Date.now(), background = "tint" }: AgentKeyOptions = {},
+	{ flashOn = false, showTitle = false, now = Date.now(), background = "tint", contextPct = null }: AgentKeyOptions = {},
 ): string {
 	const color = COLORS[agent.status];
 	const alert = agent.status === "blocked";
@@ -98,6 +123,7 @@ export function renderAgent(
 	const bg = alert && flashOn ? BG_ALERT : BG;
 	const second = showTitle && agent.title ? agent.title : agent.agent;
 	const label = truncate(agent.label, 11);
+	const hasBar = contextPct !== null && contextPct !== undefined;
 	return svg(
 		bg,
 		(tinted ? `<rect width="144" height="144" fill="${color}" opacity="0.28"/>` : "") +
@@ -105,7 +131,10 @@ export function renderAgent(
 			dot(30, 32, 15, agent.status) +
 			text(54, 39, 19, "#c9ccd3", truncate(second, 7)) +
 			text(72, 88, fitSize(label, 128, 28, 18), "#ffffff", label, { weight: 700, anchor: "middle" }) +
-			(agent.since ? text(72, 126, 22, tinted ? "#ffffff" : color, formatElapsed(now - agent.since), { weight: 700, anchor: "middle" }) : ""),
+			(agent.since
+				? text(72, hasBar ? 120 : 126, 22, tinted ? "#ffffff" : color, formatElapsed(now - agent.since), { weight: 700, anchor: "middle" })
+				: "") +
+			(hasBar ? bar(16, 128, 112, 6, contextPct) : ""),
 	);
 }
 
@@ -149,4 +178,19 @@ export function renderSummary(counts: Partial<Record<Status, number>>, { flashOn
 		.join("");
 	const border = alert ? `<rect x="3" y="3" width="138" height="138" rx="10" fill="none" stroke="${COLORS.blocked}" stroke-width="6"/>` : "";
 	return svg(bg, border + body);
+}
+
+// Plan usage for the current window, e.g. Claude's 5-hour limit.
+export function renderUsage({ pct, resetsAt, now = Date.now() }: { pct: number | null; resetsAt?: number | null; now?: number }): string {
+	if (pct === null) {
+		return svg(BG, text(72, 66, 24, "#c9ccd3", "usage", { weight: 700, anchor: "middle" }) + text(72, 98, 18, COLORS.off, "no data", { anchor: "middle" }));
+	}
+	const color = levelColor(pct);
+	return svg(
+		BG,
+		text(72, 34, 18, "#c9ccd3", "usage", { anchor: "middle" }) +
+			text(72, 84, 40, pct >= 70 ? color : "#ffffff", `${Math.round(pct)}%`, { weight: 700, anchor: "middle" }) +
+			bar(16, 98, 112, 8, pct) +
+			(resetsAt && resetsAt > now ? text(72, 132, 17, COLORS.idle, `resets ${formatElapsed(resetsAt - now)}`, { anchor: "middle" }) : ""),
+	);
 }

@@ -4,7 +4,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { countByStatus, HerdrWatcher, labelAgents, normalizeAgents, request, resolveSocketPath, sortByAttention, trackSince } from "../src/herdr.ts";
+import { countByStatus, HerdrWatcher, labelAgents, normalizeAgents, percentToken, request, resolveSocketPath, sortByAttention, trackSince } from "../src/herdr.ts";
 import { agentList, workspaceList } from "./fixtures.ts";
 
 describe("resolveSocketPath", () => {
@@ -42,6 +42,18 @@ describe("normalizeAgents", () => {
 		const changed = agents.map((a) => (a.paneId === "w1:p1" ? { ...a, status: "working" as const } : a));
 		const second = trackSince(changed, first, 200);
 		assert.deepEqual(second.map((a) => a.since), [200, 100, 100, 100]);
+	});
+	it("keeps tokens only from the agent's own session", () => {
+		const raw = (session: string) => ({ agent_status: "idle", pane_id: "p", workspace_id: "w", agent_session: { value: "s-1" }, tokens: { session, ctx_pct: "42" } });
+		assert.equal(normalizeAgents({ agents: [raw("s-1")] }, null)[0]?.tokens.ctx_pct, "42");
+		assert.deepEqual(normalizeAgents({ agents: [raw("old")] }, null)[0]?.tokens, {});
+		assert.deepEqual(normalizeAgents({ agents: [{ agent_status: "idle", pane_id: "p", workspace_id: "w" }] }, null)[0]?.tokens, {});
+	});
+	it("reads percentage tokens", () => {
+		assert.equal(percentToken({ tokens: { ctx_pct: "42" } }, "ctx_pct"), 42);
+		assert.equal(percentToken({ tokens: { ctx_pct: "140" } }, "ctx_pct"), 100);
+		assert.equal(percentToken({ tokens: { ctx_pct: "n/a" } }, "ctx_pct"), null);
+		assert.equal(percentToken({ tokens: {} }, "ctx_pct"), null);
 	});
 	it("sorts by attention and counts", () => {
 		assert.deepEqual(sortByAttention(agents).map((a) => a.status), ["blocked", "done", "working", "idle"]);

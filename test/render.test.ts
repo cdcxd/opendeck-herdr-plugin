@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { COLORS, formatElapsed, msUntilNextLabel, renderAgent, renderEmpty, renderOffline, renderSummary, truncate } from "../src/render.ts";
+import { COLORS, formatElapsed, levelColor, msUntilCountdownLabel, msUntilNextLabel, renderAgent, renderEmpty, renderOffline, renderSummary, renderUsage, truncate } from "../src/render.ts";
 
 const decode = (url: string) => {
 	assert.match(url, /^data:image\/svg\+xml;charset=utf8,/);
@@ -41,6 +41,19 @@ describe("render", () => {
 		assert.notEqual(renderAgent(agent, { flashOn: true }), renderAgent(agent));
 		const working = { ...agent, status: "working" } as const;
 		assert.equal(renderAgent(working, { flashOn: true }), renderAgent(working));
+	});
+	it("draws a context bar only when context use is known", () => {
+		assert.ok(!decode(renderAgent(agent)).includes(`opacity="0.15"`));
+		assert.ok(decode(renderAgent(agent, { contextPct: 50 })).includes(`fill="${levelColor(50)}"`));
+		assert.equal(levelColor(75), "#f5a524");
+		assert.equal(levelColor(95), COLORS.blocked);
+	});
+	it("renders plan usage with time until reset", () => {
+		const svg = decode(renderUsage({ pct: 63, resetsAt: 2 * 3_600_000 + 5_000, now: 0 }));
+		assert.ok(svg.includes(">63%<") && svg.includes(">resets 2h<"));
+		assert.ok(decode(renderUsage({ pct: null })).includes("no data"));
+		assert.equal(msUntilCountdownLabel(2 * 3_600_000 + 5_000), 5_001);
+		assert.equal(msUntilCountdownLabel(0), Infinity);
 	});
 	it("summary lists only non-zero statuses", () => {
 		const svg = decode(renderSummary({ blocked: 0, working: 2, done: 0, idle: 1 }));

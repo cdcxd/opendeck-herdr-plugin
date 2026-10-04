@@ -31,6 +31,15 @@
 			"PropertyInspectorPath": "pi/summary.html",
 			"Controllers": ["Keypad"],
 			"States": [{ "Image": "imgs/summary" }]
+		},
+		{
+			"Name": "Usage",
+			"UUID": "io.github.cdcxd.herdr.usage",
+			"Icon": "imgs/usage",
+			"Tooltip": "Plan usage in the current window, e.g. Claude's 5-hour limit.",
+			"PropertyInspectorPath": "pi/usage.html",
+			"Controllers": ["Keypad"],
+			"States": [{ "Image": "imgs/usage" }]
 		}
 	]
 }

@@ -8,10 +8,9 @@ Ideas and decisions that aren't built yet. Shipped behaviour is described in the
 - **A short press never changes an agent.** It only focuses. Anything that sends input to an agent needs a deliberate gesture *and* you looking at the agent in your terminal.
 - **One plugin, one repo.** Harness adapters live under `integrations/<harness>/`. They share only herdr token names (below), so there's no package split.
 
-## 1. Polish and publish (next)
+## 1. Release
 
-- Mock screenshot for the README, generated from fake agents (`docs/keys.png`). No real workspace names.
-- `gh repo create cdcxd/opendeck-herdr-plugin --public`, then tag `v0.1.0` so CI attaches the `.streamDeckPlugin` to a release.
+Published at github.com/cdcxd/opendeck-herdr-plugin. Tag `v0.1.0` when ready; CI then attaches the `.streamDeckPlugin` to a release.
 
 ## 2. Harness metadata: model, effort, context
 
@@ -25,16 +24,20 @@ Token names (shared contract between adapters and the plugin):
 | `model`      | `opus`   | short model name                 |
 | `effort`     | `high`   | reasoning effort, if any         |
 | `usage_pct`  | `63`     | plan usage in the current window |
+| `usage_resets` | `1791112015` | when that window resets, epoch seconds |
+| `session`    | `d0e1…`  | agent session id; the plugin ignores tokens from another session |
+
+herdr keeps tokens until their TTL expires, even after the agent exits, so a new agent in the same pane could inherit them; the `session` token prevents that. Adapters use a 12 h TTL.
 
 Adapters:
 
-- **Claude Code**: a `statusLine` command already receives model and context-window JSON on every update. It forwards that with `herdr pane report-metadata --pane "$HERDR_PANE_ID" ...` and prints the normal status line. About 10 lines; ships as `integrations/claude-code/statusline.sh`.
+- **Claude Code**: done, `integrations/claude-code/statusline.sh`.
 - **Codex, omp**: investigate their hook/statusline mechanisms; same token names.
 
 Deck side:
 
-- **Context bar**: a thin bar along the bottom edge of an agent key. Grey normally, amber above 70%, red above 90%. Hidden when no `ctx_pct` token.
-- **Usage meter action**: a separate key showing `usage_pct` as a gauge.
+- Done: context bar on agent keys, and the Usage action.
+- herdr has no event for token changes, so they arrive with the 5 s poll. Ask herdr for a metadata event if that lag matters.
 - Model/effort: shown in the key's settings preview and, on devices with a screen strip, in the detail panel (see Devices). Not on the 72 px key; too small.
 
 ## 3. Approve from the deck

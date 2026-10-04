@@ -13,6 +13,8 @@ export interface KeySettings {
 	flash?: boolean;
 	showTitle?: boolean;
 	background?: "tint" | "plain";
+	// Bar along the bottom showing the agent's context window use; on unless false.
+	contextBar?: boolean;
 }
 
 export const DEFAULT_MODE: Mode = "order";

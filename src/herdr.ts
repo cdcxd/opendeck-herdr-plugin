@@ -26,6 +26,8 @@ export interface Agent {
 	// Epoch ms when this agent entered its current status, as observed by the plugin.
 	// herdr exposes no timestamps, so after a plugin restart this starts from first sight.
 	since: number;
+	// Values harness adapters report with `herdr pane report-metadata --token`; see integrations/.
+	tokens: Record<string, string>;
 }
 
 // The subset of herdr's agent.list / workspace.list responses we read.
@@ -44,6 +46,7 @@ export interface RawAgent {
 	focused?: boolean;
 	state_change_seq?: number;
 	agent_session?: { value?: string };
+	tokens?: Record<string, string>;
 }
 
 export interface RawWorkspace {
@@ -162,10 +165,11 @@ export function normalizeAgents(
 		.map((a, i): Agent => {
 			const ws = workspaces.get(a.workspace_id);
 			const cwd = a.foreground_cwd || a.cwd || "";
+			const sessionId = a.agent_session?.value ?? null;
 			return {
 				paneId: a.pane_id,
 				workspaceId: a.workspace_id,
-				sessionId: a.agent_session?.value ?? null,
+				sessionId,
 				status: STATUSES.has(a.agent_status) ? (a.agent_status as Status) : "unknown",
 				agent: a.display_agent || a.agent || "agent",
 				workspace: ws?.label || path.basename(cwd) || a.workspace_id,
@@ -176,9 +180,26 @@ export function normalizeAgents(
 				stateSeq: a.state_change_seq ?? 0,
 				order: (ws?.number ?? 1e6) * 1e4 + i,
 				since: 0,
+				tokens: currentTokens(a.tokens, sessionId),
 			};
 		})
 		.sort((a, b) => a.order - b.order);
+}
+
+// herdr keeps pane tokens until their TTL runs out, even after the agent exits.
+// Adapters report a `session` token; drop tokens left behind by another session.
+function currentTokens(tokens: Record<string, string> | undefined, sessionId: string | null): Record<string, string> {
+	if (!tokens) return {};
+	if (tokens.session && sessionId && tokens.session !== sessionId) return {};
+	return tokens;
+}
+
+// Percentage token as a number clamped to 0..100, or null when absent or malformed.
+export function percentToken(agent: Pick<Agent, "tokens">, name: string): number | null {
+	const raw = agent.tokens[name];
+	if (raw === undefined || raw.trim() === "") return null;
+	const n = Number(raw);
+	return Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : null;
 }
 
 // Key label: the herdr agent name if set (`herdr agent rename`), otherwise the

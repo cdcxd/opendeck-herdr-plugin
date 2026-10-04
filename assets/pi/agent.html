@@ -24,10 +24,20 @@
 			<option value="plain">Plain</option>
 		</select>
 	</div>
+	<div class="row"><label for="contextBar">Context bar</label><input id="contextBar" type="checkbox" data-setting="contextBar" /></div>
+	<div class="hint">Context window use, reported by a harness adapter (see integrations/ in the repo).</div>
 	<div class="row"><label for="showTitle">Show pane title</label><input id="showTitle" type="checkbox" data-setting="showTitle" /></div>
 	<h4>All keys</h4>
-	<div class="row"><label for="activate">After focus, run</label><input id="activate" data-global="activateCommand" placeholder="wmctrl -xa ghostty" /></div>
-	<div class="hint">Optional shell command to raise your terminal window.</div>
+	<div class="row">
+		<label for="raise">Bring terminal to front</label>
+		<select id="raise" data-global="raise">
+			<option value="auto">Yes</option>
+			<option value="off">No</option>
+		</select>
+	</div>
+	<div class="hint">Raises the terminal running herdr after a press. On X11 this needs <code>wmctrl</code>.</div>
+	<div class="row"><label for="activate">Custom raise command</label><input id="activate" data-global="activateCommand" placeholder="automatic" /></div>
+	<div class="hint">Optional shell command that replaces the automatic raise, e.g. for Wayland.</div>
 	<div class="row"><label for="session">herdr session</label><input id="session" data-global="session" placeholder="default" /></div>
 	<div class="row"><label for="socket">Socket path</label><input id="socket" data-global="socketPath" placeholder="~/.config/herdr/herdr.sock" /></div>
 	<div id="status"></div>

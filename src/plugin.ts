@@ -1,18 +1,22 @@
 // Entry point: shows herdr agent status on Stream Deck keys.
 
 import { spawn } from "node:child_process";
-import { type Agent, countByStatus, HerdrWatcher, request, resolveSocketPath, type SocketOptions, sortByAttention } from "./herdr.ts";
+import { type Agent, countByStatus, HerdrWatcher, percentToken, request, resolveSocketPath, type SocketOptions, sortByAttention } from "./herdr.ts";
 import { DEFAULT_MODE, type KeySettings, nextFreeSlot, resolveAgent } from "./keys.ts";
-import { msUntilNextLabel, renderAgent, renderEmpty, renderOffline, renderSummary } from "./render.ts";
+import { msUntilCountdownLabel, msUntilNextLabel, renderAgent, renderEmpty, renderOffline, renderSummary, renderUsage } from "./render.ts";
 import { parseArgs, StreamDeck } from "./streamdeck.ts";
+import { raiseTerminal } from "./window.ts";
 
 const PLUGIN = "io.github.cdcxd.herdr";
 const AGENT_ACTION = `${PLUGIN}.agent`;
 const SUMMARY_ACTION = `${PLUGIN}.summary`;
+const USAGE_ACTION = `${PLUGIN}.usage`;
 const FLASH_MS = 600;
 
 interface GlobalSettings extends SocketOptions {
 	activateCommand?: string;
+	// "auto" (default) raises the terminal running herdr after a focus; "off" doesn't.
+	raise?: "auto" | "off";
 }
 
 interface Key {
@@ -45,13 +49,28 @@ function imageFor(key: Key): string {
 	if (key.action === SUMMARY_ACTION) {
 		return renderSummary(countByStatus(watcher.agents), { flashOn: Boolean(key.settings.flash) && flashOn });
 	}
+	if (key.action === USAGE_ACTION) return renderUsage(currentUsage());
 	const agent = resolveAgent(watcher.agents, key.settings);
 	if (!agent) return renderEmpty(key.settings.mode === "pinned" ? null : key.settings.slot);
 	return renderAgent(agent, {
 		flashOn: Boolean(key.settings.flash) && flashOn,
 		showTitle: key.settings.showTitle,
 		background: key.settings.background,
+		contextPct: key.settings.contextBar === false ? null : percentToken(agent, "ctx_pct"),
 	});
+}
+
+// Plan usage is per account, so every agent reports the same window. Usage only
+// grows within a window, so the highest value from an unexpired window is the latest.
+function currentUsage(now = Date.now()): { pct: number | null; resetsAt: number | null } {
+	let best: { pct: number | null; resetsAt: number | null } = { pct: null, resetsAt: null };
+	for (const agent of watcher.agents) {
+		const pct = percentToken(agent, "usage_pct");
+		const resetsAt = Number(agent.tokens.usage_resets) * 1000 || null;
+		if (pct === null || (resetsAt !== null && resetsAt <= now)) continue;
+		if (best.pct === null || pct > best.pct) best = { pct, resetsAt };
+	}
+	return best;
 }
 
 function render(context: string): void {
@@ -77,6 +96,11 @@ function scheduleLabelUpdate(): void {
 	const now = Date.now();
 	let wait = Infinity;
 	for (const key of keys.values()) {
+		if (key.action === USAGE_ACTION) {
+			const { resetsAt } = currentUsage(now);
+			if (resetsAt) wait = Math.min(wait, msUntilCountdownLabel(resetsAt - now));
+			continue;
+		}
 		if (key.action !== AGENT_ACTION) continue;
 		const agent = resolveAgent(watcher.agents, key.settings);
 		if (agent?.since) wait = Math.min(wait, msUntilNextLabel(now - agent.since));
@@ -113,11 +137,24 @@ function agentChoices() {
 	}));
 }
 
-// agent.focus only switches panes inside herdr; this optional user command
-// raises the terminal window itself, e.g. `wmctrl -xa ghostty` on X11.
+let lastRaiseError = "";
+
+// agent.focus only switches panes inside herdr; this brings the terminal window
+// itself to the front. A custom command replaces the automatic lookup.
 function activateTerminal(): void {
 	const command = globalSettings.activateCommand?.trim();
-	if (!command) return;
+	if (!command) {
+		if (globalSettings.raise === "off") return;
+		raiseTerminal().then(
+			() => (lastRaiseError = ""),
+			(err: Error) => {
+				// Log each distinct failure once, not on every press.
+				if (err.message !== lastRaiseError) log(`raise terminal: ${err.message}`);
+				lastRaiseError = err.message;
+			},
+		);
+		return;
+	}
 	const child = spawn("/bin/sh", ["-c", command], { detached: true, stdio: "ignore" });
 	child.on("error", (err) => log(`activate command failed: ${err.message}`));
 	child.unref();
@@ -150,6 +187,10 @@ sd.on("willAppear", ({ context, action, device, payload }) => {
 		settings.mode = DEFAULT_MODE;
 		settings.slot = nextFreeSlot(keys.values(), device ?? "");
 		settings.flash ??= true;
+		sd.setSettings(context, settings);
+	}
+	if (action === AGENT_ACTION && settings.contextBar === undefined) {
+		settings.contextBar = true;
 		sd.setSettings(context, settings);
 	}
 	if (action === SUMMARY_ACTION && settings.flash === undefined) {
@@ -188,6 +229,7 @@ sd.on("keyDown", ({ context, action }) => {
 		if (top && (top.status === "blocked" || top.status === "done")) void focus(context, top);
 		return;
 	}
+	if (action === USAGE_ACTION) return;
 	void focus(context, resolveAgent(watcher.agents, key.settings));
 });
 
