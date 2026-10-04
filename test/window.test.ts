@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isHerdrClient, parsePs, parseWmctrl, terminalPids } from "../src/window.ts";
+import { bundleMainPid, isHerdrClient, parsePs, parseWmctrl, terminalPids } from "../src/window.ts";
 
 describe("raise terminal", () => {
 	it("recognises the interactive herdr client only", () => {
@@ -31,5 +31,19 @@ describe("raise terminal", () => {
 			{ id: "0x02600004", pid: 4444 },
 			{ id: "0x04a00004", pid: 262684 },
 		]);
+	});
+	it("maps an app's helper process to the app itself on macOS", () => {
+		const procs = parsePs(
+			[
+				"  900     1 /Applications/iTerm.app/Contents/MacOS/iTerm2",
+				"  950     1 /Applications/iTerm.app/Contents/MacOS/iTermServer-3.5 --server",
+				"  960   950 -zsh",
+				"  970   960 herdr",
+			].join("\n"),
+		);
+		const [found] = terminalPids(procs, new Set([900, 950]));
+		assert.equal(found, 950);
+		assert.equal(bundleMainPid(procs, 950), 900);
+		assert.equal(bundleMainPid(procs, 970), 970);
 	});
 });

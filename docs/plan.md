@@ -25,6 +25,7 @@ Token names (shared contract between adapters and the plugin):
 | `effort`     | `high`   | reasoning effort, if any         |
 | `usage_pct`  | `63`     | plan usage in the current window |
 | `usage_resets` | `1791112015` | when that window resets, epoch seconds |
+| `usage_7d_pct`, `usage_7d_resets` | `18` | the same for the weekly window |
 | `session`    | `d0e1…`  | agent session id; the plugin ignores tokens from another session |
 
 herdr keeps tokens until their TTL expires, even after the agent exits, so a new agent in the same pane could inherit them; the `session` token prevents that. Adapters use a 12 h TTL.

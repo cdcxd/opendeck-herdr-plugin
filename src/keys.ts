@@ -3,6 +3,7 @@
 import { type Agent, sortByAttention } from "./herdr.ts";
 
 export type Mode = "attention" | "order" | "pinned";
+export type UsageWindow = "5h" | "1w";
 
 export interface KeySettings {
 	mode?: Mode;
@@ -15,6 +16,10 @@ export interface KeySettings {
 	background?: "tint" | "plain";
 	// Bar along the bottom showing the agent's context window use; on unless false.
 	contextBar?: boolean;
+	// Rippling dot while working; on unless false.
+	animate?: boolean;
+	// Usage action: which plan window to show; a press switches it.
+	usageWindow?: UsageWindow;
 }
 
 export const DEFAULT_MODE: Mode = "order";

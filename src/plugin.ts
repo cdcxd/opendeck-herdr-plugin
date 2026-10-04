@@ -2,8 +2,8 @@
 
 import { spawn } from "node:child_process";
 import { type Agent, countByStatus, HerdrWatcher, percentToken, request, resolveSocketPath, type SocketOptions, sortByAttention } from "./herdr.ts";
-import { DEFAULT_MODE, type KeySettings, nextFreeSlot, resolveAgent } from "./keys.ts";
-import { msUntilCountdownLabel, msUntilNextLabel, renderAgent, renderEmpty, renderOffline, renderSummary, renderUsage } from "./render.ts";
+import { DEFAULT_MODE, type KeySettings, nextFreeSlot, resolveAgent, type UsageWindow } from "./keys.ts";
+import { SPIN_FRAMES, msUntilCountdownLabel, msUntilNextLabel, renderAgent, renderEmpty, renderOffline, renderSummary, renderUsage } from "./render.ts";
 import { parseArgs, StreamDeck } from "./streamdeck.ts";
 import { raiseTerminal } from "./window.ts";
 
@@ -11,7 +11,10 @@ const PLUGIN = "io.github.cdcxd.herdr";
 const AGENT_ACTION = `${PLUGIN}.agent`;
 const SUMMARY_ACTION = `${PLUGIN}.summary`;
 const USAGE_ACTION = `${PLUGIN}.usage`;
-const FLASH_MS = 600;
+// One animation tick drives the working ripple (a cycle is SPIN_FRAMES ticks) and the
+// blocked blink, which toggles every BLINK_TICKS ticks (600 ms).
+const TICK_MS = 150;
+const BLINK_TICKS = 4;
 
 interface GlobalSettings extends SocketOptions {
 	activateCommand?: string;
@@ -39,8 +42,9 @@ const log = (msg: string) => {
 const keys = new Map<string, Key>(); // context -> key
 const lastImage = new Map<string, string>(); // context -> data URL, to skip redundant setImage calls
 let globalSettings: GlobalSettings = {};
+let tick = 0;
 let flashOn = false;
-let flashTimer: NodeJS.Timeout | null = null;
+let animTimer: NodeJS.Timeout | null = null;
 
 const watcher = new HerdrWatcher({ socketPath: resolveSocketPath(), log });
 
@@ -49,24 +53,32 @@ function imageFor(key: Key): string {
 	if (key.action === SUMMARY_ACTION) {
 		return renderSummary(countByStatus(watcher.agents), { flashOn: Boolean(key.settings.flash) && flashOn });
 	}
-	if (key.action === USAGE_ACTION) return renderUsage(currentUsage());
+	if (key.action === USAGE_ACTION) {
+		const window = key.settings.usageWindow ?? "5h";
+		return renderUsage({ ...currentUsage(window), window });
+	}
 	const agent = resolveAgent(watcher.agents, key.settings);
 	if (!agent) return renderEmpty(key.settings.mode === "pinned" ? null : key.settings.slot);
 	return renderAgent(agent, {
 		flashOn: Boolean(key.settings.flash) && flashOn,
+		spin: key.settings.animate === false ? null : tick % SPIN_FRAMES,
 		showTitle: key.settings.showTitle,
 		background: key.settings.background,
 		contextPct: key.settings.contextBar === false ? null : percentToken(agent, "ctx_pct"),
 	});
 }
 
+// Token names per usage window; see integrations/claude-code/statusline.sh.
+const USAGE_TOKENS = { "5h": ["usage_pct", "usage_resets"], "1w": ["usage_7d_pct", "usage_7d_resets"] } as const;
+
 // Plan usage is per account, so every agent reports the same window. Usage only
 // grows within a window, so the highest value from an unexpired window is the latest.
-function currentUsage(now = Date.now()): { pct: number | null; resetsAt: number | null } {
+function currentUsage(window: UsageWindow, now = Date.now()): { pct: number | null; resetsAt: number | null } {
+	const [pctToken, resetsToken] = USAGE_TOKENS[window];
 	let best: { pct: number | null; resetsAt: number | null } = { pct: null, resetsAt: null };
 	for (const agent of watcher.agents) {
-		const pct = percentToken(agent, "usage_pct");
-		const resetsAt = Number(agent.tokens.usage_resets) * 1000 || null;
+		const pct = percentToken(agent, pctToken);
+		const resetsAt = Number(agent.tokens[resetsToken]) * 1000 || null;
 		if (pct === null || (resetsAt !== null && resetsAt <= now)) continue;
 		if (best.pct === null || pct > best.pct) best = { pct, resetsAt };
 	}
@@ -86,7 +98,7 @@ let labelTimer: NodeJS.Timeout | undefined;
 
 function renderAll(): void {
 	for (const context of keys.keys()) render(context);
-	updateFlashTimer();
+	updateAnimation();
 	scheduleLabelUpdate();
 }
 
@@ -97,7 +109,7 @@ function scheduleLabelUpdate(): void {
 	let wait = Infinity;
 	for (const key of keys.values()) {
 		if (key.action === USAGE_ACTION) {
-			const { resetsAt } = currentUsage(now);
+			const { resetsAt } = currentUsage(key.settings.usageWindow ?? "5h", now);
 			if (resetsAt) wait = Math.min(wait, msUntilCountdownLabel(resetsAt - now));
 			continue;
 		}
@@ -108,23 +120,27 @@ function scheduleLabelUpdate(): void {
 	if (wait !== Infinity) labelTimer = setTimeout(renderAll, wait + 20);
 }
 
-// Blink only while some flash-enabled key is actually showing a blocked agent.
-function updateFlashTimer(): void {
+// Tick only while some key is showing a blinking blocked agent or a spinning working one.
+// render() skips unchanged images, so static keys cost nothing per tick.
+function updateAnimation(): void {
 	const needed =
 		watcher.connected &&
 		[...keys.values()].some((key) => {
-			if (!key.settings.flash) return false;
-			if (key.action === SUMMARY_ACTION) return watcher.agents.some((a) => a.status === "blocked");
-			return resolveAgent(watcher.agents, key.settings)?.status === "blocked";
+			if (key.action === SUMMARY_ACTION) return Boolean(key.settings.flash) && watcher.agents.some((a) => a.status === "blocked");
+			if (key.action !== AGENT_ACTION) return false;
+			const status = resolveAgent(watcher.agents, key.settings)?.status;
+			return (status === "blocked" && key.settings.flash) || (status === "working" && key.settings.animate !== false);
 		});
-	if (needed && !flashTimer) {
-		flashTimer = setInterval(() => {
-			flashOn = !flashOn;
+	if (needed && !animTimer) {
+		animTimer = setInterval(() => {
+			tick++;
+			flashOn = Math.floor(tick / BLINK_TICKS) % 2 === 1;
 			for (const context of keys.keys()) render(context);
-		}, FLASH_MS);
-	} else if (!needed && flashTimer) {
-		clearInterval(flashTimer);
-		flashTimer = null;
+		}, TICK_MS);
+	} else if (!needed && animTimer) {
+		clearInterval(animTimer);
+		animTimer = null;
+		tick = 0;
 		flashOn = false;
 	}
 }
@@ -189,8 +205,9 @@ sd.on("willAppear", ({ context, action, device, payload }) => {
 		settings.flash ??= true;
 		sd.setSettings(context, settings);
 	}
-	if (action === AGENT_ACTION && settings.contextBar === undefined) {
-		settings.contextBar = true;
+	if (action === AGENT_ACTION && (settings.contextBar === undefined || settings.animate === undefined)) {
+		settings.contextBar ??= true;
+		settings.animate ??= true;
 		sd.setSettings(context, settings);
 	}
 	if (action === SUMMARY_ACTION && settings.flash === undefined) {
@@ -206,7 +223,7 @@ sd.on("willDisappear", ({ context }) => {
 	if (!context) return;
 	keys.delete(context);
 	lastImage.delete(context);
-	updateFlashTimer();
+	updateAnimation();
 });
 
 sd.on("didReceiveSettings", ({ context, payload }) => {
@@ -229,7 +246,14 @@ sd.on("keyDown", ({ context, action }) => {
 		if (top && (top.status === "blocked" || top.status === "done")) void focus(context, top);
 		return;
 	}
-	if (action === USAGE_ACTION) return;
+	// Switches between the 5-hour and weekly window, and refreshes.
+	if (action === USAGE_ACTION) {
+		key.settings = { ...key.settings, usageWindow: key.settings.usageWindow === "1w" ? "5h" : "1w" };
+		sd.setSettings(context, key.settings);
+		renderAll();
+		watcher.scheduleRefresh();
+		return;
+	}
 	void focus(context, resolveAgent(watcher.agents, key.settings));
 });
 

@@ -6,7 +6,13 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-const run = promisify(execFile);
+const execFileAsync = promisify(execFile);
+
+// A timeout so a stuck X server or a pending macOS permission prompt can't pile up
+// hung children, one per key press.
+function run(file: string, args: string[], options: { maxBuffer?: number } = {}) {
+	return execFileAsync(file, args, { timeout: 3000, ...options });
+}
 
 export interface Proc {
 	pid: number;
@@ -66,8 +72,9 @@ async function raiseX11(): Promise<string> {
 	let listing: string;
 	try {
 		listing = (await run("wmctrl", ["-lp"])).stdout;
-	} catch {
-		throw new Error("install wmctrl to bring the terminal to the front");
+	} catch (err) {
+		if ((err as NodeJS.ErrnoException).code === "ENOENT") throw new Error("install wmctrl to bring the terminal to the front");
+		throw new Error(`wmctrl failed: ${(err as Error).message}`);
 	}
 	const windows = parseWmctrl(listing);
 	const [pid] = terminalPids(await processes(), new Set(windows.map((w) => w.pid)));
@@ -78,11 +85,29 @@ async function raiseX11(): Promise<string> {
 	return id;
 }
 
+// Bundle path of a process running from an app, e.g. "/Applications/iTerm.app".
+export function appBundle(args: string): string | null {
+	const i = args.indexOf(".app/");
+	return i < 0 ? null : args.slice(0, i + 4);
+}
+
+// The app's main process for a helper inside its bundle (iTerm2 runs shells under
+// iTerm.app/Contents/MacOS/iTermServer-*, which System Events can't bring forward).
+export function bundleMainPid(procs: readonly Proc[], pid: number): number {
+	const bundle = appBundle(procs.find((p) => p.pid === pid)?.args ?? "");
+	if (!bundle) return pid;
+	const main = procs
+		.filter((p) => p.args.startsWith(`${bundle}/Contents/MacOS/`) && !p.args.slice(bundle.length).includes(".app/"))
+		.sort((a, b) => a.pid - b.pid)[0];
+	return main?.pid ?? pid;
+}
+
 async function raiseMac(): Promise<string> {
 	const procs = await processes();
-	// Every app process is a candidate; System Events ignores pids that aren't apps.
-	const [pid] = terminalPids(procs, new Set(procs.filter((p) => p.args.includes(".app/")).map((p) => p.pid)));
-	if (pid === undefined) throw new Error("no terminal app running a herdr client found");
+	// Every process inside an app bundle is a candidate.
+	const [found] = terminalPids(procs, new Set(procs.filter((p) => appBundle(p.args)).map((p) => p.pid)));
+	if (found === undefined) throw new Error("no terminal app running a herdr client found");
+	const pid = bundleMainPid(procs, found);
 	await run("osascript", ["-e", `tell application "System Events" to set frontmost of (first process whose unix id is ${pid}) to true`]);
 	return String(pid);
 }

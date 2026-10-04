@@ -77,16 +77,35 @@ export function msUntilCountdownLabel(remaining: number): number {
 	return (remaining % elapsedStep(remaining)) + 1;
 }
 
+export const SPIN_FRAMES = 8;
+
+// Working, animated: a small drop with two ripples spreading out and fading,
+// half a cycle apart so there's always one in flight.
+function ripple(cx: number, cy: number, r: number, color: string, frame: number): string {
+	let rings = "";
+	for (const offset of [0, 0.5]) {
+		const p = ((frame % SPIN_FRAMES) / SPIN_FRAMES + offset) % 1;
+		const radius = (r * (0.6 + 0.7 * p)).toFixed(1);
+		rings += `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${color}" stroke-width="3.5" opacity="${(1 - p).toFixed(2)}"/>`;
+	}
+	return rings + `<circle cx="${cx}" cy="${cy}" r="${Math.round(r * 0.35)}" fill="${color}"/>`;
+}
+
 // Filled dot for active states, hollow for idle (as herdr draws it).
-function dot(cx: number, cy: number, r: number, status: Status): string {
+// With a `spin` frame (0..SPIN_FRAMES-1), working draws the ripple instead.
+function dot(cx: number, cy: number, r: number, status: Status, spin: number | null = null): string {
 	const color = COLORS[status];
-	return status === "idle" || status === "unknown"
-		? `<circle cx="${cx}" cy="${cy}" r="${r - 2}" fill="none" stroke="${color}" stroke-width="4"/>`
-		: `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"/>`;
+	if (status === "idle" || status === "unknown") {
+		return `<circle cx="${cx}" cy="${cy}" r="${r - 2}" fill="none" stroke="${color}" stroke-width="4"/>`;
+	}
+	if (status === "working" && spin !== null) return ripple(cx, cy, r, color, spin);
+	return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"/>`;
 }
 
 export interface AgentKeyOptions {
 	flashOn?: boolean;
+	// Animation frame for a working agent; null draws a static dot.
+	spin?: number | null;
 	showTitle?: boolean;
 	now?: number;
 	// "tint": background washed with the status color; "plain": dark key.
@@ -115,7 +134,7 @@ function bar(x: number, y: number, width: number, height: number, pct: number): 
 // `flashOn` swaps to the alert background so a blocked key can blink.
 export function renderAgent(
 	agent: Pick<Agent, "status" | "agent" | "label" | "title" | "since">,
-	{ flashOn = false, showTitle = false, now = Date.now(), background = "tint", contextPct = null }: AgentKeyOptions = {},
+	{ flashOn = false, spin = null, showTitle = false, now = Date.now(), background = "tint", contextPct = null }: AgentKeyOptions = {},
 ): string {
 	const color = COLORS[agent.status];
 	const alert = agent.status === "blocked";
@@ -128,7 +147,7 @@ export function renderAgent(
 		bg,
 		(tinted ? `<rect width="144" height="144" fill="${color}" opacity="0.28"/>` : "") +
 			(alert ? `<rect x="3" y="3" width="138" height="138" rx="10" fill="none" stroke="${color}" stroke-width="6"/>` : "") +
-			dot(30, 32, 15, agent.status) +
+			dot(30, 32, 15, agent.status, spin) +
 			text(54, 39, 19, "#c9ccd3", truncate(second, 7)) +
 			text(72, 88, fitSize(label, 128, 28, 18), "#ffffff", label, { weight: 700, anchor: "middle" }) +
 			(agent.since
@@ -180,17 +199,31 @@ export function renderSummary(counts: Partial<Record<Status, number>>, { flashOn
 	return svg(bg, border + body);
 }
 
-// Plan usage for the current window, e.g. Claude's 5-hour limit.
-export function renderUsage({ pct, resetsAt, now = Date.now() }: { pct: number | null; resetsAt?: number | null; now?: number }): string {
+const CLAUDE_ORANGE = "#d97757";
+
+// Claude plan usage for one window ("5h" or "1w"), over a faint orange "CC" watermark.
+export function renderUsage({
+	pct,
+	resetsAt,
+	window = "5h",
+	now = Date.now(),
+}: { pct: number | null; resetsAt?: number | null; window?: string; now?: number }): string {
+	const mark = text(72, 100, 78, CLAUDE_ORANGE, "CC", { weight: 800, anchor: "middle" }).replace("<text ", '<text opacity="0.22" ');
+	const header =
+		`<text x="72" y="30" font-size="20" font-weight="700" text-anchor="middle" ${FONT}>` +
+		`<tspan fill="${CLAUDE_ORANGE}">claude</tspan><tspan fill="#c9ccd3"> ${escapeXml(window)}</tspan></text>`;
 	if (pct === null) {
-		return svg(BG, text(72, 66, 24, "#c9ccd3", "usage", { weight: 700, anchor: "middle" }) + text(72, 98, 18, COLORS.off, "no data", { anchor: "middle" }));
+		return svg(BG, mark + header + text(72, 92, 20, COLORS.off, "no data", { anchor: "middle" }));
 	}
 	const color = levelColor(pct);
 	return svg(
 		BG,
-		text(72, 34, 18, "#c9ccd3", "usage", { anchor: "middle" }) +
-			text(72, 84, 40, pct >= 70 ? color : "#ffffff", `${Math.round(pct)}%`, { weight: 700, anchor: "middle" }) +
-			bar(16, 98, 112, 8, pct) +
-			(resetsAt && resetsAt > now ? text(72, 132, 17, COLORS.idle, `resets ${formatElapsed(resetsAt - now)}`, { anchor: "middle" }) : ""),
+		mark +
+			header +
+			text(72, 72, 34, pct >= 70 ? color : "#ffffff", `${Math.round(pct)}%`, { weight: 700, anchor: "middle" }) +
+			bar(16, 84, 112, 8, pct) +
+			(resetsAt && resetsAt > now
+				? text(72, 126, 22, "#c9ccd3", `in ${formatElapsed(resetsAt - now)}`, { weight: 700, anchor: "middle" })
+				: ""),
 	);
 }

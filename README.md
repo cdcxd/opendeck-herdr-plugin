@@ -5,8 +5,8 @@ Live [herdr](https://herdr.dev) agent status on an Elgato Stream Deck, for
 
 ![A 15-key Stream Deck showing herdr agents (mock data)](docs/keys.png)
 
-Each key is one agent: a status dot, the agent type, a label, and how long it has
-been in its current state. When an agent stops and wants you, its key turns red
+Each key is one agent: a status dot (rippling while it works), the agent type, a label,
+how long it has been in its current state, and, for Claude Code, a context-window bar. When an agent stops and wants you, its key turns red
 and blinks. Press a key to jump straight to that agent's pane; the plugin also brings your
 terminal window to the front.
 
@@ -28,16 +28,16 @@ The elapsed time counts from when the plugin saw the status change: herdr doesn'
   - *Slot, most urgent first*: slot 1 is whichever agent most needs you. Keys reorder as states change.
   - *A specific agent*: pinned to one agent. It's matched by agent session, so the pin survives a herdr restart.
 
-  New keys take the next free slot automatically. Options: skip idle agents, blink when blocked, tinted or plain background, show the pane title instead of the agent type, context bar.
+  New keys take the next free slot automatically. Options: skip idle agents, blink when blocked, rippling dot while working, tinted or plain background, show the pane title instead of the agent type, context bar.
 - **Summary**: counts agents per status and turns red when any agent is blocked. Press it to jump to the most urgent agent.
-- **Usage**: plan usage in the current window (Claude's 5-hour limit) and time until it resets. Needs a [harness adapter](#harness-adapters).
+- **Usage (Claude)**: Claude plan usage and time until it resets, for the 5-hour (`5h`) or weekly (`1w`) window. Press to switch. Shows the highest value any live Claude session reported, since usage only grows within a window. Needs the [Claude Code adapter](#harness-adapters).
 
 ## Harness adapters
 
 herdr knows each agent's status, but not its model or how full its context window is. Adapters
 report those to herdr as pane tokens, and the plugin reads them from herdr. With an adapter, agent
 keys get a **context bar** along the bottom edge (grey, amber above 70%, red above 90%), and the
-**Usage** key works.
+**Usage (Claude)** key works.
 
 **Claude Code**: use [`integrations/claude-code/statusline.sh`](integrations/claude-code/statusline.sh)
 as your status line (needs `jq`). In `~/.claude/settings.json`:
@@ -48,7 +48,11 @@ as your status line (needs `jq`). In `~/.claude/settings.json`:
 
 It prints a short `[model] 42% context` line. To keep your own status line, append its command:
 `.../statusline.sh ~/.claude/my-statusline.sh`. Claude Code updates the status line after each
-message, so the bar follows with that delay. Outside herdr the script only prints the status line.
+message, so the bar follows with that delay. This costs nothing: the status line is a local
+script fed data Claude Code already has, with no extra API calls. Plan usage is account-wide but
+only reported with Claude's own API responses, so it can lag while every session is idle. Outside herdr the script only prints the status line.
+The plugin ignores values left behind by an earlier Claude session in the same pane; that check needs
+herdr's Claude integration (`herdr integration install claude`), which herdr uses to track sessions.
 
 Codex and omp adapters are planned; the token names are in [docs/plan.md](docs/plan.md).
 
@@ -116,5 +120,7 @@ npm run check     # typecheck + tests
 npm run deploy    # build and install into OpenDeck
 npm run package   # dist/io.github.cdcxd.herdr.streamDeckPlugin
 ```
+
+`docs/keys.png` is drawn by the plugin's own renderer from fake agents: see `scripts/mock-deck.ts` for the command.
 
 Stream Deck hosts load a folder named `<plugin uuid>.sdPlugin`; that folder is generated in `dist/`, so the repo itself stays flat. Pushing a `v*` tag builds the package and attaches it to a GitHub release.

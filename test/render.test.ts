@@ -23,6 +23,13 @@ describe("render", () => {
 		assert.ok(!decode(renderAgent(agent, { background: "plain" })).includes('opacity="0.28"'));
 		assert.ok(!decode(renderAgent({ ...agent, status: "idle" })).includes('opacity="0.28"'));
 	});
+	it("animates the working dot by frame", () => {
+		const working = { ...agent, status: "working" } as const;
+		assert.ok(!decode(renderAgent(working)).includes("opacity=\"0.50\""));
+		assert.ok(decode(renderAgent(working, { spin: 0 })).includes("opacity=\"0.50\""));
+		assert.notEqual(renderAgent(working, { spin: 0 }), renderAgent(working, { spin: 1 }));
+		assert.equal(renderAgent(agent, { spin: 0 }), renderAgent(agent, { spin: 1 }));
+	});
 	it("draws idle as a hollow dot", () => {
 		const svg = decode(renderAgent({ ...agent, status: "idle" }));
 		assert.match(svg, new RegExp(`<circle [^>]*fill="none" stroke="${COLORS.idle}"`));
@@ -50,7 +57,8 @@ describe("render", () => {
 	});
 	it("renders plan usage with time until reset", () => {
 		const svg = decode(renderUsage({ pct: 63, resetsAt: 2 * 3_600_000 + 5_000, now: 0 }));
-		assert.ok(svg.includes(">63%<") && svg.includes(">resets 2h<"));
+		assert.ok(svg.includes(">63%<") && svg.includes(">in 2h<") && svg.includes("> 5h<"));
+		assert.ok(decode(renderUsage({ pct: 18, window: "1w", now: 0 })).includes("> 1w<"));
 		assert.ok(decode(renderUsage({ pct: null })).includes("no data"));
 		assert.equal(msUntilCountdownLabel(2 * 3_600_000 + 5_000), 5_001);
 		assert.equal(msUntilCountdownLabel(0), Infinity);
